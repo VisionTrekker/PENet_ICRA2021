@@ -291,7 +291,8 @@ class BasicBlockGeo(nn.Module):
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
+
+        # 当stride 不等于 1 时, self.conv1 和 self.downsample 对输入进行下采样
         self.conv1 = conv3x3(inplanes + geoplanes, planes, stride)
         self.bn1 = norm_layer(planes)
         self.relu = nn.ReLU(inplace=True)

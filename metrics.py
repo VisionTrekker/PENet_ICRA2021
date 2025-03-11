@@ -17,19 +17,20 @@ class Result(object):
         self.mse = 0
         self.rmse = 0
         self.mae = 0
-        self.absrel = 0
-        self.squared_rel = 0
-        self.lg10 = 0
+        self.absrel = 0             # 绝对相对误差
+        self.squared_rel = 0        # 平方相对误差
+        self.lg10 = 0               # log MAE,                      clg10 = 1/n * sum(|log(pred) - log(gt)|)
         self.delta1 = 0
         self.delta2 = 0
         self.delta3 = 0
         self.data_time = 0
         self.gpu_time = 0
-        self.silog = 0  # Scale invariant logarithmic error [log(m)*100]
+
+        self.silog = 0  # Scale invariant logarithmic error [log(m)*100],　d = log(pred) - log(gt), silog = 1/n * sum(d_i ** 2) + 1/n^2 * ( sum(d_i) ) ** 2
         self.photometric = 0
 
     def set_to_worst(self):
-        self.irmse = np.inf
+        self.irmse = np.inf     # np.inf 为一个无限大的正整数
         self.imae = np.inf
         self.mse = np.inf
         self.rmse = np.inf
@@ -44,8 +45,7 @@ class Result(object):
         self.data_time = 0
         self.gpu_time = 0
 
-    def update(self, irmse, imae, mse, rmse, mae, absrel, squared_rel, lg10, \
-            delta1, delta2, delta3, gpu_time, data_time, silog, photometric=0):
+    def update(self, irmse, imae, mse, rmse, mae, absrel, squared_rel, lg10, delta1, delta2, delta3, gpu_time, data_time, silog, photometric=0):
         self.irmse = irmse
         self.imae = imae
         self.mse = mse
@@ -59,14 +59,15 @@ class Result(object):
         self.delta3 = delta3
         self.data_time = data_time
         self.gpu_time = gpu_time
+
         self.silog = silog
         self.photometric = photometric
 
     def evaluate(self, output, target, photometric=0):
         valid_mask = target > 0.1
 
-        # convert from meters to mm
-        output_mm = 1e3 * output[valid_mask]
+        # 将单位从　m　换算到　mm
+        output_mm = 1e3 * output[valid_mask]        # 变成了一维数组
         target_mm = 1e3 * target[valid_mask]
 
         abs_diff = (output_mm - target_mm).abs()
@@ -74,8 +75,8 @@ class Result(object):
         self.mse = float((torch.pow(abs_diff, 2)).mean())
         self.rmse = math.sqrt(self.mse)
         self.mae = float(abs_diff.mean())
-        self.lg10 = float((log10(output_mm) - log10(target_mm)).abs().mean())
-        self.absrel = float((abs_diff / target_mm).mean())
+        self.lg10 = float(( log10(output_mm) - log10(target_mm) ).abs().mean())     # log MAE
+        self.absrel = float((abs_diff / target_mm).mean())                          # 绝对相对误差
         self.squared_rel = float(((abs_diff / target_mm)**2).mean())
 
         maxRatio = torch.max(output_mm / target_mm, target_mm / output_mm)
@@ -85,14 +86,13 @@ class Result(object):
         self.data_time = 0
         self.gpu_time = 0
 
-        # silog uses meters
+        # silog 使用　m 为单位                    d = log(pred) - log(gt),            silog = 1/n * sum(d_i ** 2) + [1/n * ( sum(d_i) )] ** 2
         err_log = torch.log(target[valid_mask]) - torch.log(output[valid_mask])
         normalized_squared_log = (err_log**2).mean()
         log_mean = err_log.mean()
-        self.silog = math.sqrt(normalized_squared_log -
-                               log_mean * log_mean) * 100
+        self.silog = math.sqrt(normalized_squared_log - log_mean * log_mean) * 100
 
-        # convert from meters to km
+        # 将单位从　m　换算到　km
         inv_output_km = (1e-3 * output[valid_mask])**(-1)
         inv_target_km = (1e-3 * target[valid_mask])**(-1)
         abs_inv_diff = (inv_output_km - inv_target_km).abs()

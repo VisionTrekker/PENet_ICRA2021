@@ -4,6 +4,7 @@ import shutil
 import torch
 import csv
 import vis_utils
+import numpy as np
 from metrics import Result
 
 fieldnames = [
@@ -136,7 +137,6 @@ class logger:
                 return self.output_directory + '/comparison_' + str(epoch) + '.png'
 
     def conditional_save_img_comparison(self, mode, i, ele, pred, epoch, predrgb=None, predg=None, extra=None, extra2=None, extrargb=None):
-        # save 8 images for visualization
         if mode == 'val' or mode == 'eval':
             skip = 100
             if i == 0:
@@ -144,8 +144,28 @@ class logger:
             elif i % skip == 0 and i < 8 * skip:
                 row = vis_utils.merge_into_row(ele, pred, predrgb, predg, extra, extra2, extrargb)
                 self.img_merge = vis_utils.add_row(self.img_merge, row)
-            elif i == 8 * skip:
+            elif i == 8 * skip: # 共保存 8 张
                 filename = self._get_img_comparison_name(mode, epoch)
+                vis_utils.save_image(self.img_merge, filename)
+
+    def save_img_comparison(self, mode, i, ele, pred, epoch, predrgb=None, predg=None, extra=None, extra2=None, extrargb=None):
+        """
+            mode: "val"
+            i: 图片id
+            ele: batch_data
+            pred: 预测的深度图
+            epoch: 第多少个epoch
+        """
+        # 共保存 8 张
+        if mode == 'val' or mode == 'eval':
+            skip = 20      # 每 100 张取出 1 张
+            if i == 0:
+                self.img_merge = vis_utils.merge_into_row(ele, pred, predrgb, predg, extra, extra2, extrargb)
+            elif i % skip == 0 and i < 8 * skip:
+                row = vis_utils.merge_into_row(ele, pred, predrgb, predg, extra, extra2, extrargb)
+                self.img_merge = vis_utils.add_row(self.img_merge, row)
+            elif i == 8 * skip:
+                filename = self.args.data_folder_save + '/comparison_' + str(epoch) + '.png'
                 vis_utils.save_image(self.img_merge, filename)
 
     def save_img_comparison_as_best(self, mode, epoch):
@@ -154,9 +174,9 @@ class logger:
             vis_utils.save_image(self.img_merge, filename)
 
     def get_ranking_error(self, result):
-        return getattr(result, self.args.rank_metric)
+        return getattr(result, self.args.rank_metric)       # 返回 result 中 rmse 的值
 
-    def rank_conditional_save_best(self, mode, result, epoch):
+    def rank_conditional_save_best(self, mode, result, epoch):      # 传入参数为 (mode, avg, epoch)
         error = self.get_ranking_error(result)
         best_error = self.get_ranking_error(self.best_result)
         is_best = error < best_error
@@ -177,6 +197,23 @@ class logger:
             img = torch.squeeze(pred.data.cpu()).numpy()
             filename = os.path.join(image_folder, '{0:010d}.png'.format(i))
             vis_utils.save_depth_as_uint16png(img, filename)
+
+    def save_pred(self, mode, img_name, pred, sparse, epoch):
+        if ("test" in mode or mode == "val"):
+            # save images for visualization/ testing
+            image_folder = os.path.join(self.args.data_folder_save, mode + "_output")
+            if not os.path.exists(image_folder):
+                os.makedirs(image_folder)
+            img = torch.squeeze(pred.data.cpu()).numpy()
+            np.save(os.path.join(image_folder, '{}.npy'.format(img_name)), img) # 保存为npy格式
+            filename = os.path.join(image_folder, '{}.png'.format(img_name))
+            vis_utils.save_depth_as_uint16png(img, filename)
+            # "/media/liuzhi/b4608ade-d2e0-430d-a40b-f29a8b22cb8c/3DGS_code/PENet_3dgs/results"
+            image_folder = os.path.join(self.args.data_folder_save, "sparse_output")
+            if not os.path.exists(image_folder):
+                os.makedirs(image_folder)
+            sparse = torch.squeeze(sparse.data.cpu()).numpy()
+            np.save(os.path.join(image_folder, '{}.npy'.format(img_name)), sparse)  # 保存为npy格式
 
     def conditional_summarize(self, mode, avg, is_best):
         print("\n*\nSummary of ", mode, "round")
@@ -213,7 +250,61 @@ def backup_source_code(backup_directory):
     shutil.copytree('.', backup_directory, ignore=ignore_hidden)
 
 
-def adjust_learning_rate(lr_init, optimizer, epoch, args):
+def adjust_learning_rate_new(lr_init, optimizer, actual_epoch, epoch, args):    # epoch: [n, 50] actual_epoch: [0, 50-n]
+    """Sets the learning rate to the initial LR decayed by 10 every 5 epochs"""
+    #lr = lr_init * (0.5**(epoch // 5))
+    #'''
+    lr = lr_init
+    if args.network_model == 'pe':  # 完整训练 或 中断后继续训练PENet，或 训练DA-CSPN++
+        if args.freeze_backbone == False:   # 完整训练 或 中断后继续训练PENet
+            if args.resume:                 # 中断后继续训练PENet
+                if (epoch >= 10):
+                    lr = lr_init * 0.5
+                if (epoch >= 20):
+                    lr = lr_init * 0.1
+                if (epoch >= 30):
+                    lr = lr_init * 0.01
+                if (epoch >= 40):
+                    lr = lr_init * 0.0005
+                if (epoch >= 50):
+                    lr = lr_init * 0.00001
+            else:                           # 完整训练PENet
+                if (actual_epoch >= 10):
+                    lr = lr_init * 0.5
+                if (actual_epoch >= 20):
+                    lr = lr_init * 0.1
+                if (actual_epoch >= 30):
+                    lr = lr_init * 0.01
+                if (actual_epoch >= 40):
+                    lr = lr_init * 0.0005
+                if (actual_epoch >= 50):
+                    lr = lr_init * 0.00001
+        else:
+            if args.resume:             # 训练DA-CSPN++   # 2个epoch
+                lr = lr_init
+
+    else:         # 完整训练 或 中断后继续训练ENet
+        if args.resume:                 # 中断后继续训练ENet
+            if (epoch >= 10):
+                lr = lr_init * 0.5
+            if (epoch >= 15):
+                lr = lr_init * 0.2
+            if (epoch >= 25):
+                lr = lr_init * 0.1
+        else:                           # 完整训练ENet
+            if (actual_epoch >= 10):
+                lr = lr_init * 0.5
+            if (actual_epoch >= 15):
+                lr = lr_init * 0.2
+            if (actual_epoch >= 25):
+                lr = lr_init * 0.1
+    #'''
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    return lr
+
+def adjust_learning_rate_old(lr_init, optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 5 epochs"""
     #lr = lr_init * (0.5**(epoch // 5))
     #'''
@@ -243,9 +334,12 @@ def adjust_learning_rate(lr_init, optimizer, epoch, args):
     return lr
 
 def save_checkpoint(state, is_best, epoch, output_directory):
-    checkpoint_filename = os.path.join(output_directory,
-                                       'checkpoint-' + str(epoch) + '.pth.tar')
+    checkpoint_filename = os.path.join(output_directory, 'checkpoint-' + str(epoch) + '.pth.tar')
     torch.save(state, checkpoint_filename)
+    print("saved: {}".format(checkpoint_filename))
+    # torch 1.4版本以下加载高版本torch保存的模型
+    # torch.save(state, checkpoint_filename, _use_new_zipfile_serialization=False)
+
     if is_best:
         best_filename = os.path.join(output_directory, 'model_best.pth.tar')
         shutil.copyfile(checkpoint_filename, best_filename)
@@ -259,9 +353,9 @@ def save_checkpoint(state, is_best, epoch, output_directory):
 def get_folder_name(args):
     current_time = time.strftime('%Y-%m-%d@%H-%M')
     return os.path.join(args.result,
-        'input={}.criterion={}.lr={}.bs={}.wd={}.jitter={}.time={}'.
+        'input={}.criterion={}.lr={}.he={}.w={}.bs={}.wd={}.jitter={}.time={}'.
         format(args.input, args.criterion, \
-            args.lr, args.batch_size, args.weight_decay, \
+            args.lr, args.random_crop_height, args.random_crop_width, args.batch_size, args.weight_decay, \
             args.jitter, current_time
             ))
 

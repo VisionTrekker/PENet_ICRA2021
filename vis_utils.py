@@ -17,9 +17,23 @@ def validcrop(img):
     return img[:, :, h-int(ratio*w):, :]
 
 def depth_colorize(depth):
-    depth = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
+    depth = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))   # 归一化
     depth = 255 * cmap(depth)[:, :, :3]  # H, W, C
     return depth.astype('uint8')
+def depth_colorize_(sparse_depth, pred_depth, gt_depth):
+    sparse_depth = np.nan_to_num(sparse_depth)  # H W
+    pred_depth = np.nan_to_num(pred_depth)
+
+    depth_max = np.max(sparse_depth)
+    depth_min = np.min(sparse_depth)
+    # 归一化
+    sparse_depth = (sparse_depth - depth_min) / (depth_max - depth_min)
+    pred_depth = (pred_depth - depth_min) / (depth_max - depth_min)
+    gt_depth = (gt_depth - depth_min) / (depth_max - depth_min)
+    sparse_depth = 255 * cmap(sparse_depth)[:, :, :3]  # H, W, C
+    pred_depth = 255 * cmap(pred_depth)[:, :, :3]  # H, W, C
+    gt_depth = 255 * cmap(gt_depth)[:, :, :3]  # H, W, C
+    return sparse_depth.astype('uint8'), pred_depth.astype('uint8'), gt_depth.astype('uint8')
 
 def feature_colorize(feature):
     feature = (feature - np.min(feature)) / ((np.max(feature) - np.min(feature)))
@@ -35,6 +49,11 @@ def merge_into_row(ele, pred, predrgb=None, predg=None, extra=None, extra2=None,
     def preprocess_depth(x):
         y = np.squeeze(x.data.cpu().numpy())
         return depth_colorize(y)
+    def preprocess_depth_(x, y, z):
+        x_ = np.squeeze(x.data.cpu().numpy())
+        y_ = np.squeeze(y.data.cpu().numpy())
+        z_ = np.squeeze(z.data.cpu().numpy())
+        return depth_colorize_(x_, y_, z_)
 
     # if is gray, transforms to rgb
     img_list = []
@@ -42,13 +61,17 @@ def merge_into_row(ele, pred, predrgb=None, predg=None, extra=None, extra2=None,
         rgb = np.squeeze(ele['rgb'][0, ...].data.cpu().numpy())
         rgb = np.transpose(rgb, (1, 2, 0))
         img_list.append(rgb)
-    elif 'g' in ele:
+    elif 'g' in ele:    # gray, 灰度图
         g = np.squeeze(ele['g'][0, ...].data.cpu().numpy())
         g = np.array(Image.fromarray(g).convert('RGB'))
         img_list.append(g)
-    if 'd' in ele:
-        img_list.append(preprocess_depth(ele['d'][0, ...]))
-        img_list.append(preprocess_depth(pred[0, ...]))
+
+    if 'd' in ele and 'gt' in ele:
+        sparse_depth, pred_depth, gt_depth = preprocess_depth_(ele['d'][0, ...], pred[0, ...], ele['gt'][0, ...])
+        img_list.append(sparse_depth)
+        img_list.append(pred_depth)
+        img_list.append(gt_depth)
+
     if extrargb is not None:
         img_list.append(preprocess_depth(extrargb[0, ...]))
     if predrgb is not None:
@@ -72,8 +95,9 @@ def merge_into_row(ele, pred, predrgb=None, predg=None, extra=None, extra2=None,
         extra2 = mask_vis(extra2)
         extra2 = np.array(Image.fromarray(extra2).convert('RGB'))
         img_list.append(extra2)
-    if 'gt' in ele:
-        img_list.append(preprocess_depth(ele['gt'][0, ...]))
+
+    # if 'gt' in ele:
+    #     img_list.append(preprocess_depth(ele['gt'][0, ...]))
 
     img_merge = np.hstack(img_list)
     return img_merge.astype('uint8')
@@ -99,7 +123,7 @@ def save_image_torch(rgb, filename):
 
 def save_depth_as_uint16png(img, filename):
     #from tensor
-    img = np.squeeze(img.data.cpu().numpy())
+    img = np.squeeze(img)
     img = (img * 256).astype('uint16')
     cv2.imwrite(filename, img)
 

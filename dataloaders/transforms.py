@@ -39,9 +39,8 @@ def adjust_brightness(img, brightness_factor):
 
     Args:
         img (PIL Image): PIL Image to be adjusted.
-        brightness_factor (float):  How much to adjust the brightness. Can be
-            any non negative number. 0 gives a black image, 1 gives the
-            original image while 2 increases the brightness by a factor of 2.
+        brightness_factor (float):  How much to adjust the brightness. Can be any non negative number. 0 gives a black image, 1 gives the
+                                    original image while 2 increases the brightness by a factor of 2.
 
     Returns:
         PIL Image: Brightness adjusted image.
@@ -59,9 +58,8 @@ def adjust_contrast(img, contrast_factor):
 
     Args:
         img (PIL Image): PIL Image to be adjusted.
-        contrast_factor (float): How much to adjust the contrast. Can be any
-            non negative number. 0 gives a solid gray image, 1 gives the
-            original image while 2 increases the contrast by a factor of 2.
+        contrast_factor (float):    How much to adjust the contrast. Can be any non negative number. 0 gives a solid gray image, 1 gives the
+                                    original image while 2 increases the contrast by a factor of 2.
 
     Returns:
         PIL Image: Contrast adjusted image.
@@ -407,12 +405,11 @@ class CenterCrop(object):
 
 
 class BottomCrop(object):
-    """Crops the given ``numpy.ndarray`` at the bottom.
-
+    """
+    Crops the given ``numpy.ndarray`` at the bottom.
     Args:
-        size (sequence or int): Desired output size of the crop. If size is an
-            int instead of sequence like (h, w), a square crop (size, size) is
-            made.
+        size (sequence or int):     Desired output size of the crop. If size is an
+                                    int instead of sequence like (h, w), a square crop (size, size) is made.
     """
     def __init__(self, size):
         if isinstance(size, numbers.Number):
@@ -422,20 +419,21 @@ class BottomCrop(object):
 
     @staticmethod
     def get_params(img, output_size):
-        """Get parameters for ``crop`` for bottom crop.
+        """
+        Get parameters for ``crop`` for bottom crop.
 
         Args:
-            img (numpy.ndarray (C x H x W)): Image to be cropped.
-            output_size (tuple): Expected output size of the crop.
+            img (numpy.ndarray (C x H x W)):    Image to be cropped.
+            output_size (tuple):                Expected output size of the crop.
 
         Returns:
-            tuple: params (i, j, h, w) to be passed to ``crop`` for bottom crop.
+            tuple:      params (i, j, h, w) to be passed to ``crop`` for bottom crop.
         """
         h = img.shape[0]
         w = img.shape[1]
         th, tw = output_size
         i = h - th
-        j = int(round((w - tw) / 2.))
+        j = int(round((w - tw) / 2.))   # round : 四舍五入
 
         # randomized left and right cropping
         # i = np.random.randint(i-3, i+4)
@@ -600,7 +598,7 @@ class Lambda(object):
     """
     def __init__(self, lambd):
         assert isinstance(lambd, types.LambdaType)
-        self.lambd = lambd
+        self.lambd = lambd          # slef.lambd = lambda img: adjust_brightness(img, brightness)
 
     def __call__(self, img):
         return self.lambd(img)
@@ -634,17 +632,18 @@ class HorizontalFlip(object):
 
 
 class ColorJitter(object):
-    """Randomly change the brightness, contrast and saturation of an image.
+    """
+        Randomly change the brightness, contrast and saturation of an image.
 
     Args:
-        brightness (float): How much to jitter brightness. brightness_factor
-            is chosen uniformly from [max(0, 1 - brightness), 1 + brightness].
-        contrast (float): How much to jitter contrast. contrast_factor
-            is chosen uniformly from [max(0, 1 - contrast), 1 + contrast].
-        saturation (float): How much to jitter saturation. saturation_factor
-            is chosen uniformly from [max(0, 1 - saturation), 1 + saturation].
-        hue(float): How much to jitter hue. hue_factor is chosen uniformly from
-            [-hue, hue]. Should be >=0 and <= 0.5.
+        brightness (float): How much to jitter brightness. brightness_factor is chosen uniformly from [max(0, 1 - brightness), 1 + brightness].
+
+        contrast (float): How much to jitter contrast. contrast_factor is chosen uniformly from [max(0, 1 - contrast), 1 + contrast].
+
+        saturation (float): How much to jitter saturation. saturation_factor is chosen uniformly from [max(0, 1 - saturation), 1 + saturation].
+
+        hue(float): How much to jitter hue. hue_factor is chosen uniformly from [-hue, hue]. Should be >=0 and <= 0.5.
+
     """
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
         transforms = []
@@ -668,5 +667,5 @@ class ColorJitter(object):
         if not (_is_numpy_image(img)):
             raise TypeError('img should be ndarray. Got {}'.format(type(img)))
 
-        pil = Image.fromarray(img)
-        return np.array(self.transform(pil))
+        pil = Image.fromarray(img)      # array => image
+        return np.array(self.transform(pil))        # colored image => array
